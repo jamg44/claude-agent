@@ -35,6 +35,20 @@ python{
     "description": "...",
     "input_schema": { ... }  # <-- "input_schema"
 }
-````
+```
 
 El schema interno (properties, required, etc.) es JSON Schema estándar en ambos.
+
+# tests
+
+Testing tools
+
+```sh
+pytest test_tools.py -v
+```
+
+Testing agents:
+
+```sh
+pytest -m integration -v
+```
