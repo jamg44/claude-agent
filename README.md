@@ -1,12 +1,12 @@
-# learn with claude
+# claude agent
 
-## first agent setup
+## agent setup
 
 ```sh
 uv init
 uv venv
 source .venv/bin/activate
 
-# Instalar dependencias
+# Install dependencies
 uv add anthropic python-dotenv
 ```
