@@ -8,6 +8,7 @@ load_dotenv()
 
 # Initialize client
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+MODEL="claude-sonnet-4-20250514"
 
 # Tool definitions
 TOOLS = [
@@ -64,42 +65,67 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
 def run_agent(user_message: str):
     print(f"\n🧑 User: {user_message}\n")
 
-    # Simple call to Claude (without tools yet)
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1024,
-        tools=TOOLS,
-        messages=[
-            {"role": "user", "content": user_message}
-        ]
-    )
+    # Message history
+    messages = [
+        {"role": "user", "content": user_message}
+    ]
 
-    # Extract text from response
-    final_text = ""
-    for block in response.content:
-        if block.type == "text":
-            final_text += block.text
+    # Main loop
+    while True:
+        # Call LLM
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=1024,
+            tools=TOOLS,
+            messages=messages
+        )
 
-    # print(response)
+        print(f"Stop reason: {response.stop_reason}")
 
-    print(f"\n🤖 Claude: {final_text}\n")
-    print(f"Stop reason: {response.stop_reason}")
+        if response.stop_reason == "end_turn":
+            # LLM finished, extract final text
+            final_text = ""
+            for block in response.content:
+                if block.type == "text":
+                    final_text += block.text
 
-    # Check if Claude wants to use tools
-    if response.stop_reason == "tool_use":
-        for block in response.content:
-            if block.type == "tool_use":
-                tool_name = block.name
-                tool_input = block.input
-                tool_id = block.id
+            # print(response)
+            print(f"\n🤖 LLM: {final_text}\n")
+            break  # Exit loop
+        elif response.stop_reason == "tool_use":
+            # LLM wants to use tools
+            # Add LLM's response to history
+            messages.append({
+                "role": "assistant",
+                "content": response.content
+            })
 
-                print(f"🔧 Executing tool: {tool_name}")
-                print(f"   Input: {tool_input}")
+            # Execute all requested tools
+            tool_results = []
 
-                # Execute the tool
-                result = execute_tool(tool_name=tool_name, tool_input=tool_input)
+            for block in response.content:
+                if block.type == "tool_use":
+                    tool_name = block.name
+                    tool_input = block.input
 
-                print(f"   Result: {result}\n")
+                    print(f"🔧 Executing tool: {tool_name}")
+                    print(f"   Input: {tool_input}")
+
+                    # Execute the tool
+                    result = execute_tool(tool_name, tool_input)
+                    print(f"   Result: {result}\n")
+
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": result
+                    })
+
+            # Add results to history
+            messages.append({
+                "role": "user",
+                "content": tool_results # This can be structured differently based on how you want to pass results back to the LLM
+            })
 
 
 if __name__ == "__main__":
