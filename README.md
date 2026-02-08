@@ -33,6 +33,8 @@ pytest test_tools.py -v
 
 # Integration tests (uses tokens)
 pytest -m integration -v
+# or streaming variant tests
+pytest tests/test_streaming.py -v -m integration
 ```
 
 ## Adding a New Tool
