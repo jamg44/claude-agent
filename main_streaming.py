@@ -21,12 +21,7 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
     return f"Tool not found: {tool_name}"
 
 def run_agent_streaming(user_message: str, system_prompt: str = None):
-    """Execute the agent with streaming responses
-
-    Args:
-        user_message: The user's question/request
-        system_prompt: Optional system prompt to control agent behavior
-    """
+    """Execute the agent with streaming responses"""
     print(f"\n🧑 User: {user_message}\n")
 
     # Message history
@@ -54,34 +49,13 @@ def run_agent_streaming(user_message: str, system_prompt: str = None):
         if system_prompt:
             request_params["system"] = system_prompt
 
-        # Use streaming
-        accumulated_text = ""
-        tool_uses = []
-
+        # Stream only text content
         with client.messages.stream(**request_params) as stream:
             for event in stream:
-                # Text delta - print as it arrives
+                # Only stream text deltas
                 if event.type == "content_block_delta":
                     if hasattr(event.delta, 'text'):
                         print(event.delta.text, end='', flush=True)
-                        accumulated_text += event.delta.text
-
-                # Tool use block started
-                elif event.type == "content_block_start":
-                    if hasattr(event.content_block, 'type') and event.content_block.type == "tool_use":
-                        tool_uses.append({
-                            "id": event.content_block.id,
-                            "name": event.content_block.name,
-                            "input": {}
-                        })
-
-                # Tool input delta
-                elif event.type == "content_block_delta":
-                    if hasattr(event.delta, 'partial_json'):
-                        # Accumulate tool input (comes in chunks)
-                        if tool_uses:
-                            # This is tricky - we'll handle it simpler
-                            pass
 
             # Get final message
             response = stream.get_final_message()
@@ -89,6 +63,7 @@ def run_agent_streaming(user_message: str, system_prompt: str = None):
         print()  # New line after streaming
         print(f"Stop reason: {response.stop_reason}")
 
+        # Process response
         if response.stop_reason == "end_turn":
             print(f"\n✅ Agent completed\n")
             return
