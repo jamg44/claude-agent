@@ -29,7 +29,7 @@ def run_agent(user_message: str):
     ]
 
     # Safety: max iterations to prevent infinite loops
-    max_iterations = 3
+    max_iterations = 10
     iteration = 0
 
     # Main loop
@@ -100,6 +100,8 @@ def run_agent(user_message: str):
 
 
 if __name__ == "__main__":
+    run_agent("¿Qué hora es?")
+    exit()
     # Example 1: Calculator
     run_agent("¿Cuánto es 150 multiplicado por 23?")
 
