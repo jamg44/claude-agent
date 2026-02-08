@@ -20,8 +20,8 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
 
     return f"Tool not found: {tool_name}"
 
-def run_agent(user_message: str, system_prompt: str = None):
-    """Execute the agent with a user message
+def run_agent_streaming(user_message: str, system_prompt: str = None):
+    """Execute the agent with streaming responses
 
     Args:
         user_message: The user's question/request
@@ -54,21 +54,46 @@ def run_agent(user_message: str, system_prompt: str = None):
         if system_prompt:
             request_params["system"] = system_prompt
 
-        # Call LLM
-        response = client.messages.create(**request_params)
+        # Use streaming
+        accumulated_text = ""
+        tool_uses = []
 
+        with client.messages.stream(**request_params) as stream:
+            for event in stream:
+                # Text delta - print as it arrives
+                if event.type == "content_block_delta":
+                    if hasattr(event.delta, 'text'):
+                        print(event.delta.text, end='', flush=True)
+                        accumulated_text += event.delta.text
+
+                # Tool use block started
+                elif event.type == "content_block_start":
+                    if hasattr(event.content_block, 'type') and event.content_block.type == "tool_use":
+                        tool_uses.append({
+                            "id": event.content_block.id,
+                            "name": event.content_block.name,
+                            "input": {}
+                        })
+
+                # Tool input delta
+                elif event.type == "content_block_delta":
+                    if hasattr(event.delta, 'partial_json'):
+                        # Accumulate tool input (comes in chunks)
+                        if tool_uses:
+                            # This is tricky - we'll handle it simpler
+                            pass
+
+            # Get final message
+            response = stream.get_final_message()
+
+        print()  # New line after streaming
         print(f"Stop reason: {response.stop_reason}")
 
         if response.stop_reason == "end_turn":
-            # LLM finished, extract final text
-            final_text = ""
-            for block in response.content:
-                if block.type == "text":
-                    final_text += block.text
+            print(f"\n✅ Agent completed\n")
+            return
 
             # print(response)
-            print(f"\n🤖 LLM: {final_text}\n")
-            return  # Exit function instead of break
         elif response.stop_reason == "tool_use":
             # LLM wants to use tools
             # Add LLM's response to history
@@ -85,7 +110,7 @@ def run_agent(user_message: str, system_prompt: str = None):
                     tool_name = block.name
                     tool_input = block.input
 
-                    print(f"🔧 Executing tool: {tool_name}")
+                    print(f"\n🔧 Executing tool: {tool_name}")
                     print(f"   Input: {tool_input}")
 
                     # Execute the tool
@@ -101,7 +126,7 @@ def run_agent(user_message: str, system_prompt: str = None):
             # Add results to history
             messages.append({
                 "role": "user",
-                "content": tool_results # This can be structured differently based on how you want to pass results back to the LLM
+                "content": tool_results
             })
 
         else:
@@ -110,41 +135,16 @@ def run_agent(user_message: str, system_prompt: str = None):
 
     print(f"⚠️  Max iterations ({max_iterations}) reached. Stopping.")
 
-
 if __name__ == "__main__":
-
-    # Example 1: Calculator
-    # Test 1: No system prompt (baseline)
     print("=" * 80)
-    print("TEST 1: No system prompt")
+    print("STREAMING DEMO")
     print("=" * 80)
-    run_agent("¿Cuánto es 150 multiplicado por 23?")
 
-    # Test 2: Concise system prompt
-    print("\n" + "=" * 80)
-    print("TEST 2: Concise assistant")
-    print("=" * 80)
-    concise_prompt = """You are a concise assistant.
-Give direct answers without extra explanation unless asked.
-Use tools when needed but keep responses brief."""
-
-    run_agent("¿Cuánto es 150 multiplicado por 23?", system_prompt=concise_prompt)
-
-    # Test 3: Verbose/educational system prompt
-    print("\n" + "=" * 80)
-    print("TEST 3: Educational assistant")
-    print("=" * 80)
     educational_prompt = """You are an educational assistant.
 Always explain your reasoning step-by-step.
-When using tools, explain why you're using them and what you expect.
-After getting results, explain what they mean."""
+When using tools, explain why you're using them."""
 
-    run_agent("¿Cuánto es 150 multiplicado por 23?", system_prompt=educational_prompt)
-    # # Example 2: Weather
-    # run_agent("¿Qué tiempo hace en Madrid?")
-
-    # # Example 3: Combined
-    # run_agent("¿Qué temperatura hace en Barcelona? Y luego suma esa temperatura más 10")
-
-    # # Example 4: Time
-    # run_agent("¿Qué hora es?")
+    run_agent_streaming(
+        "¿Qué temperatura hace en Barcelona? Y luego suma esa temperatura más 10",
+        system_prompt=educational_prompt
+    )
