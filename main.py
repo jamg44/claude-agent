@@ -21,8 +21,15 @@ def run_agent(user_message: str):
         ]
     )
 
-    # See what Claude returns
-    print(f"Full response:\n{response}\n")
+    # Extract text from response
+    final_text = ""
+    for block in response.content:
+        if block.type == "text":
+            final_text += block.text
+
+    print(f"\n🤖 Claude: {final_text}\n")
+    print(f"Stop reason: {response.stop_reason}")
+
 
 if __name__ == "__main__":
     # Example 1: Calculator
