@@ -34,6 +34,20 @@ TOOLS = [
             },
             "required": ["operation", "a", "b"]
         }
+    },
+    {
+        "name": "get_weather",
+        "description": "Gets current weather for a city. Note: this is a mock, returns simulated data.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "description": "City name"
+                }
+            },
+            "required": ["city"]
+        }
     }
 ]
 
@@ -60,6 +74,16 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
 
         return str(result)
 
+    elif tool_name == "get_weather":
+        city = tool_input["city"]
+        # Mock - in real life you'd call a weather API
+        return json.dumps({
+            "city": city,
+            "temperature": 22,
+            "condition": "Sunny",
+            "humidity": 65
+        })
+
     return "Tool not found"
 
 def run_agent(user_message: str):
@@ -71,7 +95,7 @@ def run_agent(user_message: str):
     ]
 
     # Safety: max iterations to prevent infinite loops
-    max_iterations = 2
+    max_iterations = 3
     iteration = 0
 
     # Main loop
