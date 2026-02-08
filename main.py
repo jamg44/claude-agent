@@ -6,16 +6,30 @@ import json
 # Load environment variables from .env file
 load_dotenv()
 
-def run_agent(user_message: str):
-    print("Hello from claude agent! user message:", user_message)
+# Initialize client
+client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
+def run_agent(user_message: str):
+    print(f"\n🧑 User: {user_message}\n")
+
+    # Simple call to Claude (without tools yet)
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1024,
+        messages=[
+            {"role": "user", "content": user_message}
+        ]
+    )
+
+    # See what Claude returns
+    print(f"Full response:\n{response}\n")
 
 if __name__ == "__main__":
     # Example 1: Calculator
     run_agent("¿Cuánto es 150 multiplicado por 23?")
 
-    # Example 2: Weather
-    run_agent("¿Qué tiempo hace en Madrid?")
+    # # Example 2: Weather
+    # run_agent("¿Qué tiempo hace en Madrid?")
 
-    # Example 3: Combined
-    run_agent("¿Qué temperatura hace en Barcelona? Y luego suma esa temperatura más 10")
+    # # Example 3: Combined
+    # run_agent("¿Qué temperatura hace en Barcelona? Y luego suma esa temperatura más 10")
