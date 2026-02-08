@@ -20,7 +20,13 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
 
     return f"Tool not found: {tool_name}"
 
-def run_agent(user_message: str):
+def run_agent(user_message: str, system_prompt: str = None):
+    """Execute the agent with a user message
+
+    Args:
+        user_message: The user's question/request
+        system_prompt: Optional system prompt to control agent behavior
+    """
     print(f"\n🧑 User: {user_message}\n")
 
     # Message history
@@ -37,13 +43,19 @@ def run_agent(user_message: str):
         iteration += 1
         print(f"--- Iteration {iteration} ---")
 
+        request_params = {
+            "model": MODEL,
+            "max_tokens": 1024,
+            "tools": TOOL_DEFINITIONS,
+            "messages": messages
+        }
+
+        # Add system prompt if provided
+        if system_prompt:
+            request_params["system"] = system_prompt
+
         # Call LLM
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=1024,
-            tools=TOOL_DEFINITIONS,
-            messages=messages
-        )
+        response = client.messages.create(**request_params)
 
         print(f"Stop reason: {response.stop_reason}")
 
@@ -100,13 +112,39 @@ def run_agent(user_message: str):
 
 
 if __name__ == "__main__":
-    run_agent("¿Qué hora es?")
-    exit()
+
     # Example 1: Calculator
+    # Test 1: No system prompt (baseline)
+    print("=" * 80)
+    print("TEST 1: No system prompt")
+    print("=" * 80)
     run_agent("¿Cuánto es 150 multiplicado por 23?")
 
-    # Example 2: Weather
-    run_agent("¿Qué tiempo hace en Madrid?")
+    # Test 2: Concise system prompt
+    print("\n" + "=" * 80)
+    print("TEST 2: Concise assistant")
+    print("=" * 80)
+    concise_prompt = """You are a concise assistant.
+Give direct answers without extra explanation unless asked.
+Use tools when needed but keep responses brief."""
 
-    # Example 3: Combined
-    run_agent("¿Qué temperatura hace en Barcelona? Y luego suma esa temperatura más 10")
+    run_agent("¿Cuánto es 150 multiplicado por 23?", system_prompt=concise_prompt)
+
+    # Test 3: Verbose/educational system prompt
+    print("\n" + "=" * 80)
+    print("TEST 3: Educational assistant")
+    print("=" * 80)
+    educational_prompt = """You are an educational assistant.
+Always explain your reasoning step-by-step.
+When using tools, explain why you're using them and what you expect.
+After getting results, explain what they mean."""
+
+    run_agent("¿Cuánto es 150 multiplicado por 23?", system_prompt=educational_prompt)
+    # # Example 2: Weather
+    # run_agent("¿Qué tiempo hace en Madrid?")
+
+    # # Example 3: Combined
+    # run_agent("¿Qué temperatura hace en Barcelona? Y luego suma esa temperatura más 10")
+
+    # # Example 4: Time
+    # run_agent("¿Qué hora es?")
