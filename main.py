@@ -70,8 +70,15 @@ def run_agent(user_message: str):
         {"role": "user", "content": user_message}
     ]
 
+    # Safety: max iterations to prevent infinite loops
+    max_iterations = 2
+    iteration = 0
+
     # Main loop
-    while True:
+    while iteration < max_iterations:
+        iteration += 1
+        print(f"--- Iteration {iteration} ---")
+
         # Call LLM
         response = client.messages.create(
             model=MODEL,
@@ -126,6 +133,13 @@ def run_agent(user_message: str):
                 "role": "user",
                 "content": tool_results # This can be structured differently based on how you want to pass results back to the LLM
             })
+
+        else:
+            print(f"⚠️  Unexpected stop_reason: {response.stop_reason}")
+            break
+
+    if iteration == max_iterations:
+        print(f"⚠️  Max iterations ({max_iterations}) reached. Stopping.")
 
 
 if __name__ == "__main__":
