@@ -91,7 +91,7 @@ That's it! Auto-discovered on next run.
 
 ## Next Steps
 
-- [ ] System prompts
+- [X] System prompts
 - [ ] Streaming responses
 - [ ] Persistent memory
 
