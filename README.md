@@ -1,54 +1,100 @@
-# claude agent
+# Claude Agent - ReAct Pattern Implementation
 
-## agent setup
+> Learning project: Building AI agents from scratch without frameworks
 
-```sh
-uv init
+## What is this?
+
+A Python implementation of the ReAct (Reasoning + Acting) pattern for AI agents using Claude API. Built to understand agent fundamentals before using frameworks like LangChain.
+
+## Features
+
+- ✅ ReAct loop with tool calling
+- ✅ Modular tool system (auto-discovery)
+- ✅ Unit tests (no token usage)
+- ✅ Integration tests (optional)
+- ✅ Loop protection (max iterations)
+
+## Quick Start
+```bash
+# Setup
 uv venv
 source .venv/bin/activate
+uv sync
 
-# Install dependencies
-uv add anthropic python-dotenv
+# Configure
+cp .env.example .env
+# Add your ANTHROPIC_API_KEY to .env
+
+# Run
+python main.py
+
+# Test (no tokens)
+pytest test_tools.py -v
+
+# Integration tests (uses tokens)
+pytest -m integration -v
 ```
 
-## tools structure
+## Adding a New Tool
 
-Diferencias menores:
-OpenAI:
+Create `tools/your_tool.py`:
+```python
+"""Your tool description"""
 
-```py
-python{
+TOOL_DEFINITION = {
+    "name": "your_tool",
+    "description": "What it does",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "param": {"type": "string", "description": "..."}
+        },
+        "required": ["param"]
+    }
+}
+
+def execute(tool_input: dict) -> str:
+    """Execute the tool"""
+    return "result"
+```
+
+That's it! Auto-discovered on next run.
+
+## Tool Schema Format
+
+### Anthropic (Claude):
+```python
+{
+    "name": "calculator",
+    "input_schema": { ... }  # JSON Schema
+}
+```
+
+### OpenAI:
+```python
+{
     "type": "function",
     "function": {
         "name": "calculator",
-        "description": "...",
-        "parameters": { ... }  # <-- "parameters" en lugar de "input_schema"
+        "parameters": { ... }  # JSON Schema
     }
 }
 ```
 
-Anthropic:
+*Note: Internal schema (properties, required) is standard JSON Schema for both.*
 
-```py
-python{
-    "name": "calculator",
-    "description": "...",
-    "input_schema": { ... }  # <-- "input_schema"
-}
-```
+## Learning Goals
 
-El schema interno (properties, required, etc.) es JSON Schema estándar en ambos.
+- Understand ReAct pattern internals
+- Build agents without framework magic
+- Create production-ready code
 
-# tests
+## Next Steps
 
-Testing tools
+- [ ] System prompts
+- [ ] Streaming responses
+- [ ] Persistent memory
 
-```sh
-pytest test_tools.py -v
-```
+## License
 
-Testing agents:
-
-```sh
-pytest -m integration -v
-```
+MIT
