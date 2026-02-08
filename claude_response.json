@@ -1,0 +1,28 @@
+{
+    "id": "msg_01Y1q4xSssf4pWZgeWK44wDz",
+    "content": [
+        {
+            "citations": null,
+            "text": "Para calcular 150 × 23:\n\n150 × 23 = 3,450\n\nPuedo mostrarte el cálculo paso a paso:\n- 150 × 20 = 3,000\n- 150 × 3 = 450\n- 3,000 + 450 = 3,450\n\nPor lo tanto, 150 multiplicado por 23 es 3,450.",
+            "type": "text"
+        }
+    ],
+    "model": "claude-sonnet-4-20250514",
+    "role": "assistant",
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "type": "message",
+    "usage": {
+        "cache_creation": {
+            "ephemeral_1h_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 24,
+        "output_tokens": 102,
+        "server_tool_use": null,
+        "service_tier": "standard"
+    }
+}
