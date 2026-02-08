@@ -36,6 +36,31 @@ TOOLS = [
     }
 ]
 
+def execute_tool(tool_name: str, tool_input: dict) -> str:
+    """Execute a tool and return the result as string"""
+
+    if tool_name == "calculator":
+        operation = tool_input["operation"]
+        a = tool_input["a"]
+        b = tool_input["b"]
+
+        if operation == "add":
+            result = a + b
+        elif operation == "subtract":
+            result = a - b
+        elif operation == "multiply":
+            result = a * b
+        elif operation == "divide":
+            if b == 0:
+                return "Error: Division by zero"
+            result = a / b
+        else:
+            return f"Unknown operation: {operation}"
+
+        return str(result)
+
+    return "Tool not found"
+
 def run_agent(user_message: str):
     print(f"\n🧑 User: {user_message}\n")
 
@@ -60,12 +85,21 @@ def run_agent(user_message: str):
     print(f"\n🤖 Claude: {final_text}\n")
     print(f"Stop reason: {response.stop_reason}")
 
-    for block in response.content:
-        print(f"Block type: {block.type}")
-        if block.type == "tool_use":
-            print(f"  Tool name: {block.name}")
-            print(f"  Tool input: {block.input}")
-            print(f"  Tool ID: {block.id}")
+    # Check if Claude wants to use tools
+    if response.stop_reason == "tool_use":
+        for block in response.content:
+            if block.type == "tool_use":
+                tool_name = block.name
+                tool_input = block.input
+                tool_id = block.id
+
+                print(f"🔧 Executing tool: {tool_name}")
+                print(f"   Input: {tool_input}")
+
+                # Execute the tool
+                result = execute_tool(tool_name=tool_name, tool_input=tool_input)
+
+                print(f"   Result: {result}\n")
 
 
 if __name__ == "__main__":
