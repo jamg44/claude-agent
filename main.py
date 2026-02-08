@@ -2,6 +2,7 @@ import os
 from anthropic import Anthropic
 from dotenv import load_dotenv
 import json
+from tools import TOOL_DEFINITIONS, TOOL_EXECUTORS
 
 # Load environment variables from .env file
 load_dotenv()
@@ -9,88 +10,6 @@ load_dotenv()
 # Initialize client
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 MODEL="claude-sonnet-4-20250514"
-
-# Tool definitions
-TOOLS = [
-    {
-        "name": "calculator",
-        "description": "Performs basic math operations. Can add, subtract, multiply and divide two numbers.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "operation": {
-                    "type": "string",
-                    "enum": ["add", "subtract", "multiply", "divide"],
-                    "description": "The operation to perform"
-                },
-                "a": {
-                    "type": "number",
-                    "description": "First number"
-                },
-                "b": {
-                    "type": "number",
-                    "description": "Second number"
-                }
-            },
-            "required": ["operation", "a", "b"]
-        }
-    },
-    {
-        "name": "get_weather",
-        "description": "Gets current weather for a city. Note: this is a mock, returns simulated data.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "city": {
-                    "type": "string",
-                    "description": "City name"
-                }
-            },
-            "required": ["city"]
-        }
-    }
-]
-
-# Individual tool executors
-def tool_calculator(tool_input: dict) -> str:
-    """Execute calculator operations"""
-    operation = tool_input["operation"]
-    a = tool_input["a"]
-    b = tool_input["b"]
-
-    if operation == "add":
-        result = a + b
-    elif operation == "subtract":
-        result = a - b
-    elif operation == "multiply":
-        result = a * b
-    elif operation == "divide":
-        if b == 0:
-            return "Error: Division by zero"
-        result = a / b
-    else:
-        return f"Unknown operation: {operation}"
-
-    return str(result)
-
-
-def tool_get_weather(tool_input: dict) -> str:
-    """Get weather for a city (mock)"""
-    city = tool_input["city"]
-    return json.dumps({
-        "city": city,
-        "temperature": 22,
-        "condition": "Sunny",
-        "humidity": 65
-    })
-
-
-# Tool registry - map tool names to their executor functions
-TOOL_EXECUTORS = {
-    "calculator": tool_calculator,
-    "get_weather": tool_get_weather
-}
-
 
 def execute_tool(tool_name: str, tool_input: dict) -> str:
     """Execute a tool by name using the registry"""
@@ -122,7 +41,7 @@ def run_agent(user_message: str):
         response = client.messages.create(
             model=MODEL,
             max_tokens=1024,
-            tools=TOOLS,
+            tools=TOOL_DEFINITIONS,
             messages=messages
         )
 
