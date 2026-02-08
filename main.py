@@ -145,8 +145,8 @@ if __name__ == "__main__":
     # Example 1: Calculator
     run_agent("¿Cuánto es 150 multiplicado por 23?")
 
-    # # Example 2: Weather
-    # run_agent("¿Qué tiempo hace en Madrid?")
+    # Example 2: Weather
+    run_agent("¿Qué tiempo hace en Madrid?")
 
-    # # Example 3: Combined
-    # run_agent("¿Qué temperatura hace en Barcelona? Y luego suma esa temperatura más 10")
+    # Example 3: Combined
+    run_agent("¿Qué temperatura hace en Barcelona? Y luego suma esa temperatura más 10")
