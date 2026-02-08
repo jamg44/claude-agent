@@ -51,40 +51,55 @@ TOOLS = [
     }
 ]
 
+# Individual tool executors
+def tool_calculator(tool_input: dict) -> str:
+    """Execute calculator operations"""
+    operation = tool_input["operation"]
+    a = tool_input["a"]
+    b = tool_input["b"]
+
+    if operation == "add":
+        result = a + b
+    elif operation == "subtract":
+        result = a - b
+    elif operation == "multiply":
+        result = a * b
+    elif operation == "divide":
+        if b == 0:
+            return "Error: Division by zero"
+        result = a / b
+    else:
+        return f"Unknown operation: {operation}"
+
+    return str(result)
+
+
+def tool_get_weather(tool_input: dict) -> str:
+    """Get weather for a city (mock)"""
+    city = tool_input["city"]
+    return json.dumps({
+        "city": city,
+        "temperature": 22,
+        "condition": "Sunny",
+        "humidity": 65
+    })
+
+
+# Tool registry - map tool names to their executor functions
+TOOL_EXECUTORS = {
+    "calculator": tool_calculator,
+    "get_weather": tool_get_weather
+}
+
+
 def execute_tool(tool_name: str, tool_input: dict) -> str:
-    """Execute a tool and return the result as string"""
+    """Execute a tool by name using the registry"""
+    executor = TOOL_EXECUTORS.get(tool_name)
 
-    if tool_name == "calculator":
-        operation = tool_input["operation"]
-        a = tool_input["a"]
-        b = tool_input["b"]
+    if executor:
+        return executor(tool_input)
 
-        if operation == "add":
-            result = a + b
-        elif operation == "subtract":
-            result = a - b
-        elif operation == "multiply":
-            result = a * b
-        elif operation == "divide":
-            if b == 0:
-                return "Error: Division by zero"
-            result = a / b
-        else:
-            return f"Unknown operation: {operation}"
-
-        return str(result)
-
-    elif tool_name == "get_weather":
-        city = tool_input["city"]
-        # Mock - in real life you'd call a weather API
-        return json.dumps({
-            "city": city,
-            "temperature": 22,
-            "condition": "Sunny",
-            "humidity": 65
-        })
-
-    return "Tool not found"
+    return f"Tool not found: {tool_name}"
 
 def run_agent(user_message: str):
     print(f"\n🧑 User: {user_message}\n")
