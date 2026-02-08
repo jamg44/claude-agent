@@ -98,7 +98,7 @@ def run_agent(user_message: str):
 
             # print(response)
             print(f"\n🤖 LLM: {final_text}\n")
-            break  # Exit loop
+            return  # Exit function instead of break
         elif response.stop_reason == "tool_use":
             # LLM wants to use tools
             # Add LLM's response to history
@@ -136,10 +136,9 @@ def run_agent(user_message: str):
 
         else:
             print(f"⚠️  Unexpected stop_reason: {response.stop_reason}")
-            break
+            return  # Exit function
 
-    if iteration == max_iterations:
-        print(f"⚠️  Max iterations ({max_iterations}) reached. Stopping.")
+    print(f"⚠️  Max iterations ({max_iterations}) reached. Stopping.")
 
 
 if __name__ == "__main__":
