@@ -20,7 +20,7 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
 
     return f"Tool not found: {tool_name}"
 
-def run_agent_streaming(user_message: str, system_prompt: str = None):
+def run_agent(user_message: str, system_prompt: str = None):
     """Execute the agent with streaming responses"""
     print(f"\n🧑 User: {user_message}\n")
 
@@ -119,7 +119,7 @@ if __name__ == "__main__":
 Always explain your reasoning step-by-step.
 When using tools, explain why you're using them."""
 
-    run_agent_streaming(
+    run_agent(
         "¿Qué temperatura hace en Barcelona? Y luego suma esa temperatura más 10",
         system_prompt=educational_prompt
     )

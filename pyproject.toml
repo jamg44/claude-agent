@@ -17,6 +17,5 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 markers = [
-    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
-    "integration_no_streaming: marks tests as integration tests without streaming (deselect with '-m \"not integration_no_streaming\"')",
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')"
 ]
