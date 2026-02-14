@@ -179,14 +179,35 @@ if __name__ == "__main__":
     print("AGENT WITH MEMORY DEMO")
     print("=" * 80)
 
+    system_prompt = (
+        "Eres un buen asistente que habla en español, puede usar tools y responde rápido. "
+        "Usa herramientas cuando sea necesario y proporciona respuestas claras."
+    )
+
     # Demo 1: Start new conversation
-    conv_id = run_agent("What is 10 + 5?")
+    conv_id = run_agent("Cuanto es 10 + 5?", system_prompt=system_prompt)
 
     # Demo 2: Continue same conversation - Claude should remember context
-    run_agent("Now multiply that result by 3", conversation_id=conv_id)
+    run_agent("Ahora multiplica ese resultado por 3", conversation_id=conv_id, system_prompt=system_prompt)
 
     # Demo 3: Test memory
-    run_agent("What was my first question?", conversation_id=conv_id)
+    run_agent("¿Cuál fue mi primera pregunta?", conversation_id=conv_id, system_prompt=system_prompt)
 
     # List all conversations
-    list_conversations()
+    # list_conversations()
+
+    # Interactive mode
+    print("\n" + "=" * 80)
+    print("💬 Interactive mode - Type 'quit' to exit, 'list' to see conversations")
+    print("=" * 80)
+
+    while True:
+        user_input = input("\n🧑 You: ").strip()
+
+        if user_input.lower() == 'quit':
+            break
+        elif user_input.lower() == 'list':
+            list_conversations()
+            continue
+        elif user_input:
+            conv_id = run_agent(user_input, conversation_id=conv_id, system_prompt=system_prompt)
