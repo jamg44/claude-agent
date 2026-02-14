@@ -93,7 +93,7 @@ That's it! Auto-discovered on next run.
 
 - [X] System prompts
 - [X] Streaming responses
-- [ ] Persistent memory
+- [X] Persistent memory
 
 ## License
 

@@ -1,15 +1,17 @@
 import os
 from anthropic import Anthropic
 from dotenv import load_dotenv
-import json
 from tools import TOOL_DEFINITIONS, TOOL_EXECUTORS
+from storage import ConversationStorage
 
 # Load environment variables from .env file
 load_dotenv()
 
-# Initialize client
+# Initialize client and storage
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-MODEL="claude-sonnet-4-20250514"
+storage = ConversationStorage()
+MODEL = "claude-sonnet-4-20250514"
+
 
 def execute_tool(tool_name: str, tool_input: dict) -> str:
     """Execute a tool by name using the registry"""
@@ -20,14 +22,44 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
 
     return f"Tool not found: {tool_name}"
 
-def run_agent(user_message: str, system_prompt: str = None):
-    """Execute the agent with streaming responses"""
-    print(f"\n🧑 User: {user_message}\n")
 
-    # Message history
-    messages = [
-        {"role": "user", "content": user_message}
-    ]
+def run_agent(
+    user_message: str,
+    conversation_id: int = None,
+    system_prompt: str = None
+) -> int:
+    """Execute the agent with streaming and persistent memory
+
+    Args:
+        user_message: The user's question/request
+        conversation_id: Optional conversation ID to continue. If None, creates new conversation
+        system_prompt: Optional system prompt to control agent behavior
+
+    Returns:
+        The conversation_id (new or existing)
+    """
+
+    # Create new conversation or load existing
+    if conversation_id is None:
+        conversation_id = storage.create_conversation()
+        messages = []
+        print(f"\n🆕 New conversation (ID: {conversation_id})")
+    else:
+        # Load conversation history
+        conv = storage.get_conversation(conversation_id)
+        if conv is None:
+            conversation_id = storage.create_conversation()
+            messages = []
+            print(f"\n⚠️ Conversation not found. Started new one (ID: {conversation_id})")
+        else:
+            messages = storage.get_messages(conversation_id)
+            print(f"\n📖 Continuing: {conv['title']} (ID: {conversation_id})")
+            print(f"   {len(messages)} previous messages loaded")
+
+    # Add new user message
+    print(f"\n🧑 User: {user_message}\n")
+    messages.append({"role": "user", "content": user_message})
+    storage.add_message(conversation_id, "user", user_message)
 
     # Safety: max iterations to prevent infinite loops
     max_iterations = 10
@@ -66,9 +98,16 @@ def run_agent(user_message: str, system_prompt: str = None):
         # Process response
         if response.stop_reason == "end_turn":
             print(f"\n✅ Agent completed\n")
-            return
 
-            # print(response)
+            # Save assistant response to storage
+            messages.append({
+                "role": "assistant",
+                "content": response.content
+            })
+            storage.add_message(conversation_id, "assistant", response.content)
+
+            return conversation_id
+
         elif response.stop_reason == "tool_use":
             # LLM wants to use tools
             # Add LLM's response to history
@@ -76,6 +115,9 @@ def run_agent(user_message: str, system_prompt: str = None):
                 "role": "assistant",
                 "content": response.content
             })
+
+            # Save to storage
+            storage.add_message(conversation_id, "assistant", response.content)
 
             # Execute all requested tools
             tool_results = []
@@ -104,22 +146,47 @@ def run_agent(user_message: str, system_prompt: str = None):
                 "content": tool_results
             })
 
+            # Save tool results to storage
+            storage.add_message(conversation_id, "user", tool_results)
+
         else:
             print(f"⚠️  Unexpected stop_reason: {response.stop_reason}")
-            return  # Exit function
+            return conversation_id
 
     print(f"⚠️  Max iterations ({max_iterations}) reached. Stopping.")
+    return conversation_id
+
+
+def list_conversations():
+    """List all saved conversations"""
+    convs = storage.list_conversations()
+
+    if not convs:
+        print("\nNo conversations found.")
+        return
+
+    print("\n" + "=" * 80)
+    print("📚 Saved Conversations")
+    print("=" * 80)
+    for conv in convs:
+        print(f"ID: {conv['id']} | {conv['title']}")
+        print(f"   Created: {conv['created_at']} | Updated: {conv['updated_at']}")
+        print("-" * 80)
+
 
 if __name__ == "__main__":
     print("=" * 80)
-    print("STREAMING DEMO")
+    print("AGENT WITH MEMORY DEMO")
     print("=" * 80)
 
-    educational_prompt = """You are an educational assistant.
-Always explain your reasoning step-by-step.
-When using tools, explain why you're using them."""
+    # Demo 1: Start new conversation
+    conv_id = run_agent("What is 10 + 5?")
 
-    run_agent(
-        "¿Qué temperatura hace en Barcelona? Y luego suma esa temperatura más 10",
-        system_prompt=educational_prompt
-    )
+    # Demo 2: Continue same conversation - Claude should remember context
+    run_agent("Now multiply that result by 3", conversation_id=conv_id)
+
+    # Demo 3: Test memory
+    run_agent("What was my first question?", conversation_id=conv_id)
+
+    # List all conversations
+    list_conversations()
