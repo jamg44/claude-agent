@@ -425,3 +425,40 @@ class ConversationStorage:
                 break
 
         return [content for _, content in selected]
+
+    def list_memories(self, user_id: str, limit: int = 20) -> List[Dict]:
+        """List latest stored memories for a user"""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, content, confidence, source_conversation_id, created_at, updated_at
+                FROM memories
+                WHERE user_id = ?
+                ORDER BY updated_at DESC, id DESC
+                LIMIT ?
+                """,
+                (user_id, limit)
+            )
+            rows = cursor.fetchall()
+
+        return [
+            {
+                "id": row[0],
+                "content": row[1],
+                "confidence": row[2],
+                "source_conversation_id": row[3],
+                "created_at": row[4],
+                "updated_at": row[5],
+            }
+            for row in rows
+        ]
+
+    def clear_memories(self, user_id: str) -> int:
+        """Delete all memories for a user and return deleted count"""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM memories WHERE user_id = ?", (user_id,))
+            total = cursor.fetchone()[0]
+            cursor.execute("DELETE FROM memories WHERE user_id = ?", (user_id,))
+            return total

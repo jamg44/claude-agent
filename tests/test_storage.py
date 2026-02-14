@@ -167,3 +167,36 @@ def test_get_relevant_memories_respects_char_budget(tmp_path):
 
     total_chars = sum(len(memory) for memory in memories)
     assert total_chars <= 80
+
+
+def test_list_memories_returns_latest_first(tmp_path):
+    """Test listing memories sorted by recency"""
+    storage, _ = create_storage(tmp_path)
+
+    storage.save_memory("user-a", "Primera memoria")
+    storage.save_memory("user-a", "Segunda memoria")
+
+    memories = storage.list_memories("user-a")
+
+    assert len(memories) == 2
+    assert memories[0]["content"] == "Segunda memoria"
+    assert memories[1]["content"] == "Primera memoria"
+
+
+def test_clear_memories_removes_only_target_user(tmp_path):
+    """Test clear memories deletes only requested user memories"""
+    storage, _ = create_storage(tmp_path)
+
+    storage.save_memory("user-a", "Memoria A1")
+    storage.save_memory("user-a", "Memoria A2")
+    storage.save_memory("user-b", "Memoria B1")
+
+    deleted = storage.clear_memories("user-a")
+
+    user_a_memories = storage.list_memories("user-a")
+    user_b_memories = storage.list_memories("user-b")
+
+    assert deleted == 2
+    assert user_a_memories == []
+    assert len(user_b_memories) == 1
+    assert user_b_memories[0]["content"] == "Memoria B1"

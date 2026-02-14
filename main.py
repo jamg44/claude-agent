@@ -280,6 +280,31 @@ def list_conversations():
         print("-" * 80)
 
 
+def show_memories(user_id: str):
+    """Show stored cross-conversation memories for user"""
+    memories = storage.list_memories(user_id=user_id)
+
+    if not memories:
+        print(f"\nNo memories found for user '{user_id}'.")
+        return
+
+    print("\n" + "=" * 80)
+    print(f"🧠 Memories for user: {user_id}")
+    print("=" * 80)
+    for memory in memories:
+        source = memory["source_conversation_id"]
+        print(f"ID: {memory['id']} | source_conv: {source} | score: {memory['confidence']}")
+        print(f"   {memory['content']}")
+        print(f"   Updated: {memory['updated_at']}")
+        print("-" * 80)
+
+
+def clear_memories(user_id: str):
+    """Clear all stored memories for user"""
+    deleted = storage.clear_memories(user_id=user_id)
+    print(f"\n🗑️ Deleted {deleted} memories for user '{user_id}'.")
+
+
 if __name__ == "__main__":
     print("=" * 80)
     print("AGENT WITH MEMORY DEMO")
@@ -291,20 +316,23 @@ if __name__ == "__main__":
     )
 
     # Demo 1: Start new conversation
-    conv_id = run_agent("Cuanto es 10 + 5?", system_prompt=system_prompt)
+    # conv_id = run_agent("Cuanto es 10 + 5?", system_prompt=system_prompt)
 
     # Demo 2: Continue same conversation - Claude should remember context
-    run_agent("Ahora multiplica ese resultado por 3", conversation_id=conv_id, system_prompt=system_prompt)
+    # run_agent("Ahora multiplica ese resultado por 3", conversation_id=conv_id, system_prompt=system_prompt)
 
     # Demo 3: Test memory
-    run_agent("¿Cuál fue mi primera pregunta?", conversation_id=conv_id, system_prompt=system_prompt)
+    # run_agent("¿Cuál fue mi primera pregunta?", conversation_id=conv_id, system_prompt=system_prompt)
 
     # List all conversations
     # list_conversations()
 
     # Interactive mode
+    conv_id = None
+    user_id = DEFAULT_USER_ID
+
     print("\n" + "=" * 80)
-    print("💬 Interactive mode - Type 'quit' to exit, 'list' to see conversations")
+    print("💬 Interactive mode - Commands: 'quit', 'list', 'mem', 'mem clear'")
     print("=" * 80)
 
     while True:
@@ -315,5 +343,16 @@ if __name__ == "__main__":
         elif user_input.lower() == 'list':
             list_conversations()
             continue
+        elif user_input.lower() == 'mem':
+            show_memories(user_id)
+            continue
+        elif user_input.lower() == 'mem clear':
+            clear_memories(user_id)
+            continue
         elif user_input:
-            conv_id = run_agent(user_input, conversation_id=conv_id, system_prompt=system_prompt)
+            conv_id = run_agent(
+                user_input,
+                conversation_id=conv_id,
+                system_prompt=system_prompt,
+                user_id=user_id
+            )
