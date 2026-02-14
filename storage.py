@@ -1,9 +1,12 @@
 """Storage layer for conversation persistence using SQLite"""
 import sqlite3
 import json
+import re
 from datetime import datetime
 from typing import List, Dict, Optional
 from pathlib import Path
+
+DEFAULT_USER_ID = "default"
 
 def serialize_content(content) -> str:
     """Convert Anthropic content blocks to JSON-serializable format
@@ -68,11 +71,20 @@ class ConversationStorage:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS conversations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL DEFAULT 'default',
                     title TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+
+            # Backward compatibility: add user_id to older databases
+            cursor.execute("PRAGMA table_info(conversations)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "user_id" not in columns:
+                cursor.execute(
+                    "ALTER TABLE conversations ADD COLUMN user_id TEXT NOT NULL DEFAULT 'default'"
+                )
 
             # Messages table
             cursor.execute("""
@@ -86,7 +98,28 @@ class ConversationStorage:
                 )
             """)
 
-    def create_conversation(self, title: str = None) -> int:
+            # Cross-conversation memory snippets
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS memories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    source_conversation_id INTEGER,
+                    confidence REAL DEFAULT 1.0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (source_conversation_id) REFERENCES conversations(id)
+                )
+            """)
+
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_memories_user_id_updated ON memories(user_id, updated_at DESC)"
+            )
+
+    def create_conversation(self, title: str = None, user_id: str = DEFAULT_USER_ID) -> int:
         """Create a new conversation and return its ID"""
         if not title:
             title = f"Conversation {datetime.now().strftime('%Y-%m-%d %H:%M')}"
@@ -95,8 +128,8 @@ class ConversationStorage:
             cursor = conn.cursor()
 
             cursor.execute(
-                "INSERT INTO conversations (title) VALUES (?)",
-                (title,)
+                "INSERT INTO conversations (user_id, title) VALUES (?, ?)",
+                (user_id, title)
             )
 
             conversation_id = cursor.lastrowid
@@ -212,7 +245,7 @@ class ConversationStorage:
 
             cursor.execute(
                 """
-                SELECT id, title, created_at, updated_at
+                SELECT id, user_id, title, created_at, updated_at
                 FROM conversations
                 ORDER BY updated_at DESC
                 """
@@ -224,9 +257,38 @@ class ConversationStorage:
         for row in rows:
             conversations.append({
                 "id": row[0],
-                "title": row[1],
-                "created_at": row[2],
-                "updated_at": row[3]
+                "user_id": row[1],
+                "title": row[2],
+                "created_at": row[3],
+                "updated_at": row[4]
+            })
+        return conversations
+
+    def list_conversations_by_user(self, user_id: str) -> List[Dict]:
+        """List all conversations for a user"""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """
+                SELECT id, user_id, title, created_at, updated_at
+                FROM conversations
+                WHERE user_id = ?
+                ORDER BY updated_at DESC
+                """,
+                (user_id,)
+            )
+
+            rows = cursor.fetchall()
+
+        conversations = []
+        for row in rows:
+            conversations.append({
+                "id": row[0],
+                "user_id": row[1],
+                "title": row[2],
+                "created_at": row[3],
+                "updated_at": row[4]
             })
         return conversations
 
@@ -240,7 +302,7 @@ class ConversationStorage:
             cursor = conn.cursor()
 
             cursor.execute(
-                "SELECT id, title, created_at, updated_at FROM conversations WHERE id = ?",
+                "SELECT id, user_id, title, created_at, updated_at FROM conversations WHERE id = ?",
                 (conversation_id,)
             )
 
@@ -249,8 +311,117 @@ class ConversationStorage:
         if row:
             return {
                 "id": row[0],
-                "title": row[1],
-                "created_at": row[2],
-                "updated_at": row[3]
+                "user_id": row[1],
+                "title": row[2],
+                "created_at": row[3],
+                "updated_at": row[4]
             }
         return None
+
+    def save_memory(
+        self,
+        user_id: str,
+        content: str,
+        source_conversation_id: int | None = None,
+        confidence: float = 1.0
+    ) -> int:
+        """Store a cross-conversation memory snippet for a user"""
+        content = (content or "").strip()
+        if not content:
+            raise ValueError("Memory content cannot be empty")
+
+        with self._connect() as conn:
+            cursor = conn.cursor()
+
+            # Deduplicate exact same memory for same user
+            cursor.execute(
+                """
+                SELECT id FROM memories
+                WHERE user_id = ? AND content = ?
+                LIMIT 1
+                """,
+                (user_id, content)
+            )
+            existing = cursor.fetchone()
+
+            if existing:
+                memory_id = existing[0]
+                cursor.execute(
+                    """
+                    UPDATE memories
+                    SET updated_at = CURRENT_TIMESTAMP,
+                        confidence = CASE WHEN confidence < ? THEN ? ELSE confidence END
+                    WHERE id = ?
+                    """,
+                    (confidence, confidence, memory_id)
+                )
+                return memory_id
+
+            cursor.execute(
+                """
+                INSERT INTO memories (user_id, content, source_conversation_id, confidence)
+                VALUES (?, ?, ?, ?)
+                """,
+                (user_id, content, source_conversation_id, confidence)
+            )
+            return cursor.lastrowid
+
+    def get_relevant_memories(
+        self,
+        user_id: str,
+        query: str,
+        max_items: int = 5,
+        max_chars: int = 700
+    ) -> List[str]:
+        """Retrieve compact, relevant memories for a user without bloating context"""
+        words = [
+            word for word in re.findall(r"[a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]+", query.lower())
+            if len(word) >= 4
+        ]
+
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, content, confidence, updated_at
+                FROM memories
+                WHERE user_id = ?
+                ORDER BY updated_at DESC, confidence DESC
+                LIMIT 100
+                """,
+                (user_id,)
+            )
+            candidates = cursor.fetchall()
+
+        if not candidates:
+            return []
+
+        scored = []
+        for memory_id, content, confidence, updated_at in candidates:
+            lowered = content.lower()
+            keyword_hits = sum(1 for w in words if w in lowered)
+            score = (keyword_hits * 10) + confidence
+            scored.append((score, updated_at, memory_id, content))
+
+        scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+
+        selected = []
+        used_chars = 0
+        for score, _updated_at, memory_id, content in scored:
+            if score <= 0 and words:
+                continue
+
+            memory_text = content.strip()
+            if not memory_text:
+                continue
+
+            projected = used_chars + len(memory_text)
+            if projected > max_chars:
+                continue
+
+            selected.append((memory_id, memory_text))
+            used_chars = projected
+            if len(selected) >= max_items:
+                break
+
+        return [content for _, content in selected]

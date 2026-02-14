@@ -13,6 +13,9 @@ A Python implementation of the ReAct (Reasoning + Acting) pattern for AI agents 
 - ✅ Unit tests (no token usage)
 - ✅ Integration tests (optional)
 - ✅ Loop protection (max iterations)
+- ✅ Persistent conversation memory (SQLite)
+- ✅ Cross-conversation memory snippets (dynamic retrieval, bounded context)
+- ✅ User-scoped memory isolation (multi-user ready)
 
 ## Quick Start
 ```bash

@@ -1,8 +1,9 @@
 import os
+import re
 from anthropic import Anthropic
 from dotenv import load_dotenv
 from tools import TOOL_DEFINITIONS, TOOL_EXECUTORS
-from storage import ConversationStorage
+from storage import ConversationStorage, DEFAULT_USER_ID
 
 # Load environment variables from .env file
 load_dotenv()
@@ -11,6 +12,18 @@ load_dotenv()
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 storage = ConversationStorage()
 MODEL = "claude-sonnet-4-20250514"
+
+MEMORY_TRIGGER_KEYWORDS = (
+    "recuerda", "remember", "otra conversación", "conversación anterior",
+    "como te dije", "como dije", "mi perfil", "mis preferencias",
+    "sobre mí", "mi proyecto", "mi stack", "my preferences", "my profile"
+)
+
+MEMORY_CAPTURE_MARKERS = (
+    "mi nombre es", "me llamo", "soy ", "trabajo en", "trabajo con",
+    "prefiero", "me gusta", "uso ", "vivo en", "estoy aprendiendo",
+    "i am ", "i work", "i prefer", "i like", "my name is"
+)
 
 
 def execute_tool(tool_name: str, tool_input: dict) -> str:
@@ -23,10 +36,87 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
     return f"Tool not found: {tool_name}"
 
 
+def should_load_cross_memory(user_message: str) -> bool:
+    """Detect when cross-conversation memory is likely useful"""
+    lowered = user_message.lower()
+    return any(keyword in lowered for keyword in MEMORY_TRIGGER_KEYWORDS)
+
+
+def memory_budget(user_message: str) -> tuple[int, int]:
+    """Dynamic memory budget based on intent and input length"""
+    if should_load_cross_memory(user_message):
+        return 5, 1000
+
+    if len(user_message) > 180:
+        return 4, 800
+
+    return 3, 550
+
+
+def build_system_prompt_with_memory(
+    system_prompt: str | None,
+    memory_snippets: list[str]
+) -> str | None:
+    """Append compact memory context to system prompt when available"""
+    if not memory_snippets and not system_prompt:
+        return None
+
+    base_prompt = system_prompt.strip() if system_prompt else ""
+    if not memory_snippets:
+        return base_prompt
+
+    memory_block = "\n".join([f"- {snippet}" for snippet in memory_snippets])
+    memory_section = (
+        "Memoria útil de conversaciones anteriores (si aplica a esta petición):\n"
+        f"{memory_block}\n"
+        "Úsala solo cuando sea relevante; no inventes hechos faltantes."
+    )
+
+    if base_prompt:
+        return f"{base_prompt}\n\n{memory_section}"
+    return memory_section
+
+
+def extract_memory_candidates(user_message: str) -> list[str]:
+    """Extract stable user facts/preferences with lightweight heuristics"""
+    normalized = " ".join(user_message.strip().split())
+    lowered = normalized.lower()
+
+    if len(normalized) < 18:
+        return []
+
+    if normalized.endswith("?") and "recuerda que" not in lowered:
+        return []
+
+    candidates = []
+
+    explicit_match = re.search(r"recuerda que\s+(.+)$", normalized, flags=re.IGNORECASE)
+    if explicit_match:
+        explicit_memory = explicit_match.group(1).strip(" .")
+        if len(explicit_memory) >= 8:
+            candidates.append(explicit_memory)
+
+    if any(marker in lowered for marker in MEMORY_CAPTURE_MARKERS):
+        trimmed = normalized.strip(" .")
+        if len(trimmed) <= 220:
+            candidates.append(trimmed)
+        else:
+            candidates.append(trimmed[:220].rstrip() + "...")
+
+    # Deduplicate preserving order
+    unique = []
+    for item in candidates:
+        if item and item not in unique:
+            unique.append(item)
+
+    return unique
+
+
 def run_agent(
     user_message: str,
     conversation_id: int = None,
-    system_prompt: str = None
+    system_prompt: str = None,
+    user_id: str = DEFAULT_USER_ID
 ) -> int:
     """Execute the agent with streaming and persistent memory
 
@@ -41,16 +131,19 @@ def run_agent(
 
     # Create new conversation or load existing
     if conversation_id is None:
-        conversation_id = storage.create_conversation()
+        conversation_id = storage.create_conversation(user_id=user_id)
         messages = []
-        print(f"\n🆕 New conversation (ID: {conversation_id})")
+        print(f"\n🆕 New conversation (ID: {conversation_id}, user: {user_id})")
     else:
         # Load conversation history
         conv = storage.get_conversation(conversation_id)
-        if conv is None:
-            conversation_id = storage.create_conversation()
+        if conv is None or conv["user_id"] != user_id:
+            conversation_id = storage.create_conversation(user_id=user_id)
             messages = []
-            print(f"\n⚠️ Conversation not found. Started new one (ID: {conversation_id})")
+            print(
+                f"\n⚠️ Conversation not found for user '{user_id}'. "
+                f"Started new one (ID: {conversation_id})"
+            )
         else:
             messages = storage.get_messages(conversation_id)
             print(f"\n📖 Continuing: {conv['title']} (ID: {conversation_id})")
@@ -60,6 +153,10 @@ def run_agent(
     print(f"\n🧑 User: {user_message}\n")
     messages.append({"role": "user", "content": user_message})
     storage.add_message(conversation_id, "user", user_message)
+
+    # Save candidate long-term memories from user input
+    for candidate in extract_memory_candidates(user_message):
+        storage.save_memory(user_id=user_id, content=candidate, source_conversation_id=conversation_id)
 
     # Safety: max iterations to prevent infinite loops
     max_iterations = 10
@@ -77,9 +174,18 @@ def run_agent(
             "messages": messages
         }
 
-        # Add system prompt if provided
-        if system_prompt:
-            request_params["system"] = system_prompt
+        max_items, max_chars = memory_budget(user_message)
+        memory_snippets = storage.get_relevant_memories(
+            user_id=user_id,
+            query=user_message,
+            max_items=max_items,
+            max_chars=max_chars
+        )
+        merged_system_prompt = build_system_prompt_with_memory(system_prompt, memory_snippets)
+
+        # Add system prompt if provided or memory is available
+        if merged_system_prompt:
+            request_params["system"] = merged_system_prompt
 
         # Stream only text content
         with client.messages.stream(**request_params) as stream:
@@ -169,7 +275,7 @@ def list_conversations():
     print("📚 Saved Conversations")
     print("=" * 80)
     for conv in convs:
-        print(f"ID: {conv['id']} | {conv['title']}")
+        print(f"ID: {conv['id']} | user: {conv.get('user_id', DEFAULT_USER_ID)} | {conv['title']}")
         print(f"   Created: {conv['created_at']} | Updated: {conv['updated_at']}")
         print("-" * 80)
 
